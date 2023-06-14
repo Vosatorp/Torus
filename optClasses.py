@@ -66,10 +66,6 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
         self.penalty_coef = penalty_coef
 
         if saved is None:
-            #                self.bound = bound
-            #                self.d = bound.d
-            # m0 = len(points)
-            ok = False
             x = torch.Tensor(points)
             xl = []
             for v in product([-1.0, 0.0, 1.0], repeat=2):
@@ -171,20 +167,17 @@ class OptPartitionTorus:  # поиск оптимального разбиени
         self,
         d,
         n,
-        n_iter_circ=1000,
-        n_iter_part=5000,
+        n_iter_circ,
+        n_iter_part,
         lr_start=0.005,
         lr_decay=0.93,
         prec_opt=1 / 1000,
         diam_tol=0.99,
         messages=1,
+        device="cpu",
     ):
-        self.n_iter1 = (
-            n_iter_circ  # максимальное число итераций при оптимизации упаковки кругов
-        )
-        self.n_iter2 = (
-            n_iter_part  # максимальное число итераций при оптимизации разбиения
-        )
+        self.n_iter1 = n_iter_circ  # максимальное число итераций при оптимизации упаковки кругов
+        self.n_iter2 = n_iter_part  # максимальное число итераций при оптимизации разбиения
         self.n = n
         self.d = d
         # self.d = len(points[0])             # число частей
@@ -194,34 +187,34 @@ class OptPartitionTorus:  # поиск оптимального разбиени
         # self.v = torch.Tensor(self.poly.v).reshape((len(self.poly.planes),1))
         self.lr_start = lr_start  # начальное значение learning rate
         self.lr_decay = lr_decay  # learning rate домножается на это число через каждые 1000 итераций
-        self.messages = messages  # 1 - только результаты запусков и лучший результат, 2 - результаты оптимизации через 1000 итераций, 3 - рисунки для результатов каждого запуска
-        self.tol = (
-            diam_tol  # отображаются диаметры, принадлежащие интервалу (tol*d_max,d_max)
-        )
+        self.messages = messages 
+        # 1 - только результаты запусков и лучший результат
+        # 2 - результаты оптимизации через 1000 итераций
+        # 3 - рисунки для результатов каждого запуска
+        self.tol = diam_tol  # отображаются диаметры, принадлежащие интервалу (tol*d_max,d_max)
         self.prec_opt = prec_opt  # множитель learning rate для "точной" оптимизации
-
         self.best_p = None
         self.best_poly = None
-
         self.best_d = almost_inf
+        self.device = device
 
     def random_packing_torus(self):  # упаковка кругов в тор
         ####    U = torch.Tensor(self.poly.U)
         ####    v =  torch.Tensor(self.poly.v).reshape((len(self.poly.planes),1))
-        x = Variable(torch.rand((self.n, self.d)) - 0.5, requires_grad=True)
+        x = Variable(torch.rand((self.n, self.d)) - 0.5, requires_grad=True).to(self.device)
 
         n1 = self.n * 3 ** self.d
         lr = 0.0003
 
         optimizer = torch.optim.Adam([x], lr=lr)
-        mask = torch.BoolTensor([[i < j for i in range(n1)] for j in range(n1)])
+        mask = torch.BoolTensor([[i < j for i in range(n1)] for j in range(n1)]).to(self.device)
         for i in range(self.n_iter1):
             optimizer.zero_grad()
             xl = []
             for v in product([-1, 0, 1], repeat=2):
                 v = torch.tensor(v)
                 xl.append(x + v)
-            X = torch.cat(xl)
+            X = torch.cat(xl).to(self.device)
 
             x2 = torch.square(X)
             x2s = torch.sum(x2, 1)
@@ -233,7 +226,7 @@ class OptPartitionTorus:  # поиск оптимального разбиени
             optimizer.step()
 
             if (i + 1) % messages_iter == 0:
-                # lr = lr*0.8
+                # lr = lr * 0.8
                 for g in optimizer.param_groups:
                     g["lr"] = lr
 
@@ -345,6 +338,7 @@ class OptPartitionTorus:  # поиск оптимального разбиени
             return self.best_d
 
     def to_file(self, filename):  # запись в файл
+        # TODO: переделать в json
         with open(filename, "w") as f:
             f.write(str(self.n) + "\n")
             f.write(str(self.best_d) + "\n")  # максимальный диаметр

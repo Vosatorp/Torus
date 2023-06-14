@@ -37,6 +37,12 @@ def get_args():
         default=0,
         help="Random seed (default: 0)",
     )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cpu",
+        help="Device to use (default: cpu)",
+    )
     args = parser.parse_args()
 
     return args

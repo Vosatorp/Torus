@@ -34,7 +34,8 @@ if __name__ == "__main__":
         2,
         n=args.n,
         n_iter_circ=args.n_iter_circ,
-        n_iter_part=args.n_iter_part
+        n_iter_part=args.n_iter_part,
+        device=args.device,
     )
 
     parts[n].multiple_runs(args.num_runs)
