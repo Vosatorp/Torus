@@ -40,6 +40,7 @@ if __name__ == "__main__":
 
     parts[n].multiple_runs(args.num_runs)
     print(f" n: {n} diam: {parts[n].best_d:.8f}")
+    
     if args.name_file_path is not None:
         parts[n].to_file(args.name_file_path)
     plot_partition(parts[n])

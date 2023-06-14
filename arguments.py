@@ -43,6 +43,7 @@ def get_args():
         default="cpu",
         help="Device to use (default: cpu)",
     )
+    
     args = parser.parse_args()
 
     return args
