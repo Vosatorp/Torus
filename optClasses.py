@@ -1,3 +1,5 @@
+import pdb
+
 import torch  # в коде на данный момент не реализованы вычисления на GPU
 import numpy as np
 import json
@@ -11,6 +13,8 @@ from torch.autograd import Variable
 from itertools import product
 
 from arguments import get_args
+import pdb
+import tqdm
 
 pinf = 1e6
 
@@ -58,13 +62,12 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
         for p in self.polygons:
             for i, j in combinations(p, 2):
                 self.mask[i, j] = True
-                # for k,l in combinations(l9, 2):
+                # for k, l in combinations(l9, 2):
                 #    self.mask[i*9+k,j*9+l] = True
         self.mask = torch.BoolTensor(self.mask)
 
     def __init__(self, points=None, saved=None, penalty_coef=5.0):
         self.penalty_coef = penalty_coef
-
         if saved is None:
             x = torch.Tensor(points)
             xl = []
@@ -91,10 +94,6 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
                         remap[j] = i
                         continue
                     # print("not in the sq :", vor.vertices[j,:])
-            # print(remap)
-            # print("vertices ", vertices)
-            # print("vor. vertices ", vor.vertices)
-            # print(vertices)
             ok = True
             for i in range(len(regions)):
                 for j in range(len(regions[i])):
@@ -104,7 +103,6 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
                         # print("*** no index: ",vor.vertices[regions[i][j],:])
                         ok = False
             # self.remap_pts(regions, remap)
-
         self.points = np.array(vertices)
         n = len(self.points)
         self.n = n
@@ -112,8 +110,7 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
         self.ok = ok
 
         self.set_mask()
-
-    #    self.mask_lines = np.zeros((m,n - self.bound_vert_n),dtype=bool)
+    #    self.mask_lines = np.zeros((m,n - self.bound_vert_n), dtype=bool)
     #    for i in range(dist_lines.shape[0]):
     #      for j in range(self.bound_vert_n, dist_lines.shape[1]):
     #       if abs(dist_lines[i,j])<eps:
@@ -136,7 +133,6 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
         X = torch.cat(xl).reshape(
             9 * self.n, 2
         )  # 9 экзмепляров каждой точки со сдвигами
-
         # print(X)
         x2 = torch.square(X)
         x2s = torch.sum(x2, 1)
@@ -154,13 +150,11 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
         # print(dist_torus)
         # diags = torch.sqrt(torch.masked_select(dist_torus,self.mask))
         diags = torch.masked_select(dist_torus, self.mask)
-        # print(diags)
         # dist_lines = torch.abs(torch.masked_select(self.line_U.mm(x.t()) + self.line_v, self.mask_lines))
         # не самый экономный способ, вычисляется много лишних расстояний
         # self.err = torch.max(dist_lines)
         return torch.max(diags)  # + penalty_coef * self.err
         # второе слагаемое - "штрафная" функция; можно обойтись без нее, если задавать точки на ребрах по формуле p = a + \alpha(b-a)
-
 
 class OptPartitionTorus:  # поиск оптимального разбиения, мультистарт
     def __init__(
@@ -202,13 +196,12 @@ class OptPartitionTorus:  # поиск оптимального разбиени
         ####    U = torch.Tensor(self.poly.U)
         ####    v =  torch.Tensor(self.poly.v).reshape((len(self.poly.planes),1))
         x = Variable(torch.rand((self.n, self.d)) - 0.5, requires_grad=True).to(self.device)
-
         n1 = self.n * 3 ** self.d
         lr = 0.0003
 
         optimizer = torch.optim.Adam([x], lr=lr)
-        mask = torch.BoolTensor([[i < j for i in range(n1)] for j in range(n1)]).to(self.device)
-        for i in range(self.n_iter1):
+        mask = torch.tril(torch.ones(n1, n1, dtype=torch.bool), diagonal=-1).to(self.device)
+        for i in tqdm.tqdm(range(1, self.n_iter1 + 1)):
             optimizer.zero_grad()
             xl = []
             for v in product([-1, 0, 1], repeat=2):
@@ -222,22 +215,14 @@ class OptPartitionTorus:  # поиск оптимального разбиени
             dist_points = 0.5 * torch.sqrt(torch.masked_select(distm, mask))
             # dist_lines =   U.mm(x.t()) + v
             y = -torch.min(dist_points)
-            y.backward(retain_graph=True)
+            y.backward()
             optimizer.step()
-
-            if (i + 1) % messages_iter == 0:
+            if i % messages_iter == 0:
                 # lr = lr * 0.8
                 for g in optimizer.param_groups:
                     g["lr"] = lr
-
                 if self.messages >= 2:
-                    print(
-                        i + 1,
-                        " min_L = ",
-                        torch.min(dist_points),
-                        "   r = ",
-                        abs(float(y.detach().numpy())),
-                    )
+                    print(i, " min_L = ", torch.min(dist_points), "  r = ", abs(float(y.detach().numpy())))
         return x.detach().numpy()
 
     def random_partition_torus(self, x0):  # оптимизация разбиения
@@ -255,28 +240,21 @@ class OptPartitionTorus:  # поиск оптимального разбиени
         yp = almost_inf
         y_best = almost_inf
         no_impr = 0
-        i = 0
         precise = False
-        while True:
-            # print(i)
+        for i in tqdm.tqdm(range(1, self.n_iter2 + 1)):
             optimizer.zero_grad()
             y = self.od.forward(x)
-            y.backward(retain_graph=True)
+            y.backward()
             optimizer.step()
             ycur = y.detach().numpy()
-            # if i > 0:
-            #    print(i+1, '   d = ',float(ycur))
             if ycur < y_best:
                 y_best = ycur
                 no_impr = 0
             else:
                 no_impr += 1
-            if (i + 1) % messages_iter == 0:
+            if i % messages_iter == 0:
                 if self.messages >= 1:
-                    print(i + 1, "   d = ", float(ycur))
-                if i > self.n_iter2:
-                    break
-
+                    print(i, "   d = ", float(ycur))
                 yp = y.detach().numpy()
             if no_impr > no_impr_steps:
                 lr = lr * self.lr_decay
@@ -286,7 +264,6 @@ class OptPartitionTorus:  # поиск оптимального разбиени
                     break
                 for g in optimizer.param_groups:
                     g["lr"] = lr
-            i += 1
         self.od.points = x.detach().numpy()
         # d, dlist = self.od.diams(tol = self.tol)
         d = self.od.forward(torch.tensor(self.od.points))
