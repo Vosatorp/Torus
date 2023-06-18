@@ -66,7 +66,7 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
                 #    self.mask[i*9+k,j*9+l] = True
         self.mask = torch.BoolTensor(self.mask)
 
-    def __init__(self, points=None, saved=None, penalty_coef=5.0):
+    def __init__(self, points=None, saved=None, penalty_coef=5.0, device="cpu"):
         self.penalty_coef = penalty_coef
         if saved is None:
             x = torch.Tensor(points)
@@ -110,6 +110,7 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
         self.ok = ok
 
         self.set_mask()
+        self.device = device
     #    self.mask_lines = np.zeros((m,n - self.bound_vert_n), dtype=bool)
     #    for i in range(dist_lines.shape[0]):
     #      for j in range(self.bound_vert_n, dist_lines.shape[1]):
@@ -127,8 +128,7 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
         # n = len(x_all)
         xl = []
         for i in range(x.shape[0]):
-            for v in product([-1.0, 0.0, 1.0], repeat=2):
-                v = torch.tensor(v)
+            for v in torch.tensor(list(product([-1, 0, 1], repeat=2)), device=self.device):
                 xl.append(x[i, :] + v)
         X = torch.cat(xl).reshape(
             9 * self.n, 2
@@ -199,8 +199,7 @@ class OptPartitionTorus:  # поиск оптимального разбиени
         n1 = self.n * 3 ** self.d
         lr = 0.0003
 
-        x = x.requires_grad_()
-        optimizer = torch.optim.Adam([x], lr=lr)
+        optimizer = torch.optim.Adam([x.requires_grad_()], lr=lr)
         mask = torch.tril(torch.ones(n1, n1, dtype=torch.bool), diagonal=-1).to(self.device)
         for i in tqdm.tqdm(range(1, self.n_iter1 + 1)):
             optimizer.zero_grad()
@@ -228,14 +227,15 @@ class OptPartitionTorus:  # поиск оптимального разбиени
     def random_partition_torus(self, x0):  # оптимизация разбиения
         # self.od = OptDiagramNd(self.poly,x0)
         try:
-            self.od = OptDiagramTorus(x0)
+            self.od = OptDiagramTorus(x0, device=self.device)
         except:
             return almost_inf, None
         if not self.od.ok:
             return almost_inf, None
-        t = np.array(self.od.points)
-        x = torch.tensor(t, requires_grad=True).to(self.device)
+        x = np.array(self.od.points)
+        x = torch.tensor(x, requires_grad=True).to(self.device)
         lr = self.lr_start
+        x = x.requires_grad_()
         optimizer = torch.optim.Adam([x], lr=lr)
         yp = almost_inf
         y_best = almost_inf
