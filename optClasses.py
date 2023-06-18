@@ -64,10 +64,11 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
                 self.mask[i, j] = True
                 # for k, l in combinations(l9, 2):
                 #    self.mask[i*9+k,j*9+l] = True
-        self.mask = torch.BoolTensor(self.mask)
+        self.mask = torch.BoolTensor(self.mask).to(self.device)
 
     def __init__(self, points=None, saved=None, penalty_coef=5.0, device="cpu"):
         self.penalty_coef = penalty_coef
+        self.device = device
         if saved is None:
             x = torch.Tensor(points)
             xl = []
@@ -110,7 +111,6 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
         self.ok = ok
 
         self.set_mask()
-        self.device = device
     #    self.mask_lines = np.zeros((m,n - self.bound_vert_n), dtype=bool)
     #    for i in range(dist_lines.shape[0]):
     #      for j in range(self.bound_vert_n, dist_lines.shape[1]):
@@ -132,7 +132,7 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
                 xl.append(x[i, :] + v)
         X = torch.cat(xl).reshape(
             9 * self.n, 2
-        )  # 9 экзмепляров каждой точки со сдвигами
+        ).to(self.device)  # 9 экзмепляров каждой точки со сдвигами
         # print(X)
         x2 = torch.square(X)
         x2s = torch.sum(x2, 1)
@@ -140,7 +140,7 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
                 -2 * X.mm(X.t())
                 + x2s
                 + x2s.reshape((self.n * 9, 1))
-                + torch.eye(9 * self.n) * sqrt2
+                + torch.eye(9 * self.n).to(self.device) * sqrt2
         )
         # print(distm.shape)
         # print(self.mask.shape)
@@ -226,14 +226,12 @@ class OptPartitionTorus:  # поиск оптимального разбиени
 
     def random_partition_torus(self, x0):  # оптимизация разбиения
         # self.od = OptDiagramNd(self.poly,x0)
-        try:
-            self.od = OptDiagramTorus(x0, device=self.device)
-        except:
-            return almost_inf, None
+        self.od = OptDiagramTorus(x0, device=self.device)
+        # except:
+        #     return almost_inf, None
         if not self.od.ok:
             return almost_inf, None
-        x = np.array(self.od.points)
-        x = torch.tensor(x, requires_grad=True).to(self.device)
+        x = torch.tensor(self.od.points).to(self.device)
         lr = self.lr_start
         x = x.requires_grad_()
         optimizer = torch.optim.Adam([x], lr=lr)
@@ -248,7 +246,7 @@ class OptPartitionTorus:  # поиск оптимального разбиени
             y = self.od.forward(x)
             y.backward()
             optimizer.step()
-            ycur = y.detach().numpy()
+            ycur = y.cpu().detach().numpy()
             if ycur < y_best:
                 y_best = ycur
                 no_impr = 0
