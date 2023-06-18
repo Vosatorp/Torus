@@ -195,17 +195,18 @@ class OptPartitionTorus:  # поиск оптимального разбиени
     def random_packing_torus(self):  # упаковка кругов в тор
         ####    U = torch.Tensor(self.poly.U)
         ####    v =  torch.Tensor(self.poly.v).reshape((len(self.poly.planes),1))
-        x = Variable(torch.rand((self.n, self.d)) - 0.5, requires_grad=True).to(self.device)
+        x = torch.rand((self.n, self.d)).to(self.device)
         n1 = self.n * 3 ** self.d
         lr = 0.0003
 
+        x = x.requires_grad_()
         optimizer = torch.optim.Adam([x], lr=lr)
         mask = torch.tril(torch.ones(n1, n1, dtype=torch.bool), diagonal=-1).to(self.device)
         for i in tqdm.tqdm(range(1, self.n_iter1 + 1)):
             optimizer.zero_grad()
             xl = []
             for v in product([-1, 0, 1], repeat=2):
-                v = torch.tensor(v)
+                v = torch.tensor(v).to(self.device)
                 xl.append(x + v)
             X = torch.cat(xl).to(self.device)
 
@@ -242,6 +243,8 @@ class OptPartitionTorus:  # поиск оптимального разбиени
         no_impr = 0
         precise = False
         for i in tqdm.tqdm(range(1, self.n_iter2 + 1)):
+            # if i % 100 == 0:
+            #     plot_partition(self)
             optimizer.zero_grad()
             y = self.od.forward(x)
             y.backward()
