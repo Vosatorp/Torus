@@ -205,8 +205,7 @@ class OptPartitionTorus:  # поиск оптимального разбиени
         for i in tqdm.tqdm(range(1, self.n_iter1 + 1)):
             optimizer.zero_grad()
             xl = []
-            for v in product([-1, 0, 1], repeat=2):
-                v = torch.tensor(v).to(self.device)
+            for v in torch.tensor(list(product([-1, 0, 1], repeat=2)), device=self.device):
                 xl.append(x + v)
             X = torch.cat(xl).to(self.device)
 
@@ -235,7 +234,7 @@ class OptPartitionTorus:  # поиск оптимального разбиени
         if not self.od.ok:
             return almost_inf, None
         t = np.array(self.od.points)
-        x = torch.tensor(t, requires_grad=True)
+        x = torch.tensor(t, requires_grad=True).to(self.device)
         lr = self.lr_start
         optimizer = torch.optim.Adam([x], lr=lr)
         yp = almost_inf
