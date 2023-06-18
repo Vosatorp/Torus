@@ -223,7 +223,7 @@ class OptPartitionTorus:  # поиск оптимального разбиени
                     g["lr"] = lr
                 if self.messages >= 2:
                     print(i, " min_L = ", torch.min(dist_points), "  r = ", abs(float(y.detach().numpy())))
-        return x.detach().numpy()
+        return x.cpu().detach().numpy()
 
     def random_partition_torus(self, x0):  # оптимизация разбиения
         # self.od = OptDiagramNd(self.poly,x0)
@@ -270,7 +270,7 @@ class OptPartitionTorus:  # поиск оптимального разбиени
         if self.messages >= 3:
             self.od.draw_poly(diams=dlist)
             plt.show()
-        return d.detach().numpy(), self.od.points
+        return d.cpu().detach().numpy(), self.od.points
 
     def multiple_runs(self, m):  # мультистарт, хранение лучшего разбиения
         # best_d = almost_inf
@@ -426,7 +426,7 @@ def plot_partition(part, find_true_diam=True, plot=True):
                 start_i = i
         p_pre = pts[p[start_i]]
         pcur.append(p_pre)
-        for i in p[start_i + 1 :] + p[:start_i]:
+        for i in p[start_i + 1:] + p[:start_i]:
             mp = find_nearest(pts[i], p_pre)
             pcur.append(mp.copy())
             p_pre = mp.copy()
@@ -434,7 +434,6 @@ def plot_partition(part, find_true_diam=True, plot=True):
         for i in range(len(pcur) - 1, -1, -1):
             mp = find_nearest(pcur[i], pcur[(i + 1) % len(pcur)])
             pcur[i] = mp.copy()
-        # print(pcur)
         pcur = pcur[-part.n :]
         # find honest diameter of part and relax with true_diam
         if find_true_diam:
