@@ -264,9 +264,9 @@ class OptPartitionTorus:  # поиск оптимального разбиени
                     break
                 for g in optimizer.param_groups:
                     g["lr"] = lr
-        self.od.points = x.detach().numpy()
+        d = self.od.forward(x.detach())
+        self.od.points = x.cpu().detach().numpy()
         # d, dlist = self.od.diams(tol = self.tol)
-        d = self.od.forward(torch.tensor(self.od.points))
         if self.messages >= 3:
             self.od.draw_poly(diams=dlist)
             plt.show()
