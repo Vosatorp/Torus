@@ -191,6 +191,8 @@ class OptPartitionTorus:  # поиск оптимального разбиени
         self.best_poly = None
         self.best_d = almost_inf
         self.device = device
+        self.history_packing = []
+        self.history_partition = []
 
     def random_packing_torus(self):  # упаковка кругов в тор
         ####    U = torch.Tensor(self.poly.U)
@@ -214,6 +216,8 @@ class OptPartitionTorus:  # поиск оптимального разбиени
             dist_points = 0.5 * torch.sqrt(torch.masked_select(distm, mask))
             # dist_lines =   U.mm(x.t()) + v
             y = -torch.min(dist_points)
+            self.history_packing.append(y.cpu().item())
+
             y.backward()
             optimizer.step()
             if i % messages_iter == 0:
@@ -222,6 +226,10 @@ class OptPartitionTorus:  # поиск оптимального разбиени
                     g["lr"] = lr
                 if self.messages >= 2:
                     print(i, " min_L = ", torch.min(dist_points), "  r = ", abs(float(y.detach().numpy())))
+        plt.plot(self.history_packing)
+        plt.title("Packing of Circles")
+        plt.show()
+        self.history_packing.clear()
         return x.cpu().detach().numpy()
 
     def random_partition_torus(self, x0):  # оптимизация разбиения
@@ -240,13 +248,15 @@ class OptPartitionTorus:  # поиск оптимального разбиени
         no_impr = 0
         precise = False
         for i in tqdm.tqdm(range(1, self.n_iter2 + 1)):
-            # if i % 100 == 0:
+            # if i % 100 == 1:
+            #     self.od.points = x.cpu().detach().numpy()
             #     plot_partition(self)
             optimizer.zero_grad()
             y = self.od.forward(x)
             y.backward()
             optimizer.step()
             ycur = y.cpu().detach().numpy()
+            self.history_partition.append(ycur ** 0.5)
             if ycur < y_best:
                 y_best = ycur
                 no_impr = 0
@@ -255,7 +265,7 @@ class OptPartitionTorus:  # поиск оптимального разбиени
             if i % messages_iter == 0:
                 if self.messages >= 1:
                     print(i, "   d = ", float(ycur))
-                yp = y.detach().numpy()
+                yp = y.cpu().detach().numpy()
             if no_impr > no_impr_steps:
                 lr = lr * self.lr_decay
                 if lr < min_lr:
@@ -270,6 +280,10 @@ class OptPartitionTorus:  # поиск оптимального разбиени
         if self.messages >= 3:
             self.od.draw_poly(diams=dlist)
             plt.show()
+        plt.plot(self.history_partition)
+        plt.title("Partition of Torus")
+        plt.show()
+        self.history_partition.clear()
         return d.cpu().detach().numpy(), self.od.points
 
     def multiple_runs(self, m):  # мультистарт, хранение лучшего разбиения
@@ -413,6 +427,7 @@ def plot_partition(part, find_true_diam=True, plot=True):
         fig = plt.figure(figsize=(10, 10))
     pts = part.od.points
     true_diam = 0
+    segments = []
     for p in part.od.polygons:
         pcur = []
         start_i = 0
@@ -439,7 +454,9 @@ def plot_partition(part, find_true_diam=True, plot=True):
         if find_true_diam:
             for i in range(len(pcur)):
                 for j in range(i + 1, len(pcur)):
-                    true_diam = max(true_diam, np.linalg.norm(pcur[i] - pcur[j]))
+                    curr_diam = np.linalg.norm(pcur[i] - pcur[j])
+                    true_diam = max(true_diam, curr_diam)
+                    segments.append((pcur[i], pcur[j], curr_diam))
         if plot:
             midp = np.average(pcur, axis=0)
             plt.text(*midp, f"{len(pcur)}", fontsize=20)
@@ -454,5 +471,17 @@ def plot_partition(part, find_true_diam=True, plot=True):
             f" n: {part.n}   diam: {part.best_d:.10f}   true_diam: {true_diam:.10f}",
             fontsize=16,
         )
+        # draw diams
+        for p, q, d in segments:
+            if d > true_diam * 0.99:
+                plt.plot([p[0], q[0]], [p[1], q[1]], alpha=0.5, linestyle="--")
+                plt.text(
+                    *((p + q) / 2),
+                    f"{d:.8f}",
+                    fontsize=8,
+                    alpha=0.5,
+                    horizontalalignment="center",
+                    verticalalignment="center",
+                )
         plt.show()
     return true_diam
