@@ -31,18 +31,26 @@ def get_args():
         default=5000,
         help="Number of iterations for partial optimization (default: 5000)",
     )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=0,
-        help="Random seed (default: 0)",
-    )
+    parser.add_argument("--lr_start", type=float, default=0.005)
+    parser.add_argument("--lr_decay", type=float, default=0.93)
+    parser.add_argument("--precision_opt", type=float, default=0.001)
+    parser.add_argument("--diam_tolerance", type=float, default=0.99)
+    parser.add_argument("--messages", type=int, default=1)
+    parser.add_argument("--may_plot", type=bool, default=False)
+
     parser.add_argument(
         "--device",
         type=str,
         default="cpu",
         help="Device to use (default: cpu)",
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=0,
+        help="Random seed (default: 0)",
+    )
+    parser.add_argument("--batch_size", type=int, default=1)
     
     args = parser.parse_args()
 

@@ -31,16 +31,27 @@ if __name__ == "__main__":
 
     n = args.n
     parts[n] = OptPartitionTorus(
-        2,
+        d=2,
         n=args.n,
         n_iter_circ=args.n_iter_circ,
         n_iter_part=args.n_iter_part,
+        lr_start=args.lr_start,
+        lr_decay=args.lr_decay,
+        precision_opt=args.precision_opt,
+        diam_tolerance=args.diam_tolerance,
+        messages=args.messages,
+        may_plot=args.may_plot,
+        batch_size=args.batch_size,
         device=args.device,
     )
 
     parts[n].multiple_runs(args.num_runs)
-    print(f" n: {n} diam: {parts[n].best_d:.8f}")
+    print(f" n: {n} diam: {parts[n].best_diam:.8f}")
     
     if args.name_file_path is not None:
         parts[n].to_file(args.name_file_path)
-    plot_partition(parts[n])
+
+    plot_partition(
+        parts[n],
+        diam_tolerance=args.diam_tolerance,
+    )
