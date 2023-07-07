@@ -65,14 +65,14 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
 
     def __init__(
             self,
-            points,  # [n, 2] --> [B, n, 2]
+            points,
             batch_size,
             device,
     ):
         self.mask = None
         self.batch_size = batch_size
         self.device = device
-        x = torch.tensor(points)  # [n, 2] --> [B, n, 2]
+        x = torch.tensor(points)
         xl = []
         for v in product([-1.0, 0.0, 1.0], repeat=2):
             v = torch.tensor(v)
@@ -105,36 +105,22 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
                         self.ok = False
         self.set_mask()
 
-    #    self.mask_lines = np.zeros((m,n - self.bound_vert_n), dtype=bool)
-    #    for i in range(dist_lines.shape[0]):
-    #      for j in range(self.bound_vert_n, dist_lines.shape[1]):
-    #       if abs(dist_lines[i,j])<eps:
-    #          self.line_link.append([j,i])
-    #          self.mask_lines[i,j - self.bound_vert_n] = True
-
-    #    self.mask_lines =  torch.BoolTensor(self.mask_lines)
-    # self.bound_pt_tensor = torch.Tensor(bound.points)
-    # self.line_U = torch.tensor(bound.U)
-    # self.line_v = torch.tensor(bound.v.reshape((len(bound.planes),1)))
-
     def forward(self, x, get_diams=False):
         xl = []
-        for i in range(x.shape[0]):
+        for i in range(self.n):
             for v in torch.tensor(list(product([-1, 0, 1], repeat=2)), device=self.device):
-                xl.append(x[i, :] + v)
-        X = torch.cat(xl, dim=-2).reshape(
-            self.batch_size, 9 * self.n, 2
-        ).to(self.device)
-        x2 = torch.square(X)   # [9N, 2] --> [B, 9N, 2]
-        x2s = torch.sum(x2, -1)  # [9N] --> [B, 9N]
+                xl.append(x[..., i, :] + v)
+        X = torch.stack(xl).permute(1, 0, 2).to(self.device)
+        x2 = torch.square(X)
+        x2s = torch.sum(x2, -1)
         distm = (
-            -2 * X.matmul(X.transpose(-2, -1))  # [9N, 9N] --> [B, 9N, 9N]
+            -2 * X.matmul(X.transpose(-2, -1))
             + x2s.unsqueeze(-1)
             + x2s.unsqueeze(-2)
-        )  # [9N, 9N] --> [B, 9N, 9N]
+        )
         dist_torus = torch.min(
             distm.unfold(1, 9, 9).unfold(2, 9, 9).reshape((self.batch_size, self.n, self.n, 81)), dim=-1
-        ).values  # [N, N] --> [B, N, N]
+        ).values
         dist_torus_x = dist_torus * self.mask
         squared_diams = torch.max(torch.max(dist_torus_x, dim=-1).values, dim=-1).values
         if get_diams:
@@ -166,11 +152,6 @@ class OptPartitionTorus:  # поиск оптимального разбиени
         self.n_iter2 = n_iter_part  # максимальное число итераций при оптимизации разбиения
         self.n = n
         self.d = d
-        # self.d = len(points[0])             # число частей
-        # self.poly = CPolytop(self.d, center = np.zeros(self.d), pts = points)
-        # self.poly.prepare()
-        # self.U = torch.Tensor(self.poly.U)
-        # self.v = torch.Tensor(self.poly.v).reshape((len(self.poly.planes),1))
         self.lr_start = lr_start  # начальное значение learning rate
         self.lr_decay = lr_decay  # learning rate домножается на это число через каждые 1000 итераций
         self.messages = messages
@@ -210,10 +191,8 @@ class OptPartitionTorus:  # поиск оптимального разбиени
                 -2 * X.matmul(X.transpose(-2, -1))
                 + x2s.unsqueeze(-1)
                 + x2s.unsqueeze(-2)
-                + torch.eye(X.shape[1]).to(self.device) * 100
             )
-            # distm = torch.where(mask, distm, float('inf'))
-            # зачем mask? Разве матрица не симметрична? Для ускорения? На главной диагонали нули?
+            distm = torch.where(mask, distm, float('inf'))
             y = torch.sum(-torch.min(torch.min(distm, dim=-1).values, dim=-1).values)
             self.history_packing.append(abs(y.cpu().item()) ** 0.5 / 2)
             y.backward()
@@ -280,19 +259,20 @@ class OptPartitionTorus:  # поиск оптимального разбиени
                     print("NaN in data")
                 continue
             diams, points = self.random_partition_torus(x)
-            index_min = np.argmin(diams)
+
             new_rec = ""
             if self.od.regions is None:
                 continue
-            # временно убираю подсчет true_diam
-            # true_diam = find_true_diam(points, self.od.regions)
-            # if points is not None and true_diam < self.best_diam:
-            if points is not None and diams[index_min] < self.best_diam:
-                self.best_diam = diams[index_min]
+            true_diams = np.array([
+                find_true_diam(points[_], self.od.regions[_]) for _ in range(self.batch_size)
+            ])
+            index_min = np.argmin(true_diams)
+            if points is not None and true_diams[index_min] < self.best_diam:
+            # if points is not None and diams[index_min] < self.best_diam:
+                self.best_diam = true_diams[index_min]
                 self.best_points = points[index_min].copy()
                 self.best_poly = self.od.regions[index_min].copy()
                 new_rec = "***"
-            pdb.set_trace()
             if self.messages >= 1:
                 print("run {0}/{1}, d_max = {2}  {3}".format(i + 1, m, self.best_diam, new_rec))
         self.od.vertices = self.best_points.copy()
@@ -415,7 +395,6 @@ def plot_partition(
     pts = part.od.vertices
     true_diam = 0
     segments = []
-    pdb.set_trace()
     for p in part.od.regions:
         pcur = []
         start_i = 0
@@ -449,6 +428,7 @@ def plot_partition(
             midp = np.average(pcur, axis=0)
             plt.text(*midp, f"{len(pcur)}", fontsize=16)
             plt.fill(*zip(*pcur), alpha=0.4)
+            # plt.fill(*zip(*[pts[i] for i in p]), alpha=0.4)
     if plot:
         draw_square()
         plt.axis("equal")
@@ -462,10 +442,11 @@ def plot_partition(
         # draw diams
         for p, q, d in segments:
             if d > true_diam * diam_tolerance:
+                print(d, true_diam, p, q)
                 plt.plot([p[0], q[0]], [p[1], q[1]], alpha=0.5, linestyle="--")
                 plt.text(
                     *((p + q) / 2),
-                    f"{d / true_diam * 100:.8f}",
+                    f"{d / true_diam * 100:.8f}%",
                     fontsize=8,
                     alpha=0.5,
                     horizontalalignment="center",
