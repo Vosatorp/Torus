@@ -428,7 +428,6 @@ def plot_partition(
             midp = np.average(pcur, axis=0)
             plt.text(*midp, f"{len(pcur)}", fontsize=16)
             plt.fill(*zip(*pcur), alpha=0.4)
-            # plt.fill(*zip(*[pts[i] for i in p]), alpha=0.4)
     if plot:
         draw_square()
         plt.axis("equal")
@@ -442,15 +441,17 @@ def plot_partition(
         # draw diams
         for p, q, d in segments:
             if d > true_diam * diam_tolerance:
-                print(d, true_diam, p, q)
                 plt.plot([p[0], q[0]], [p[1], q[1]], alpha=0.5, linestyle="--")
+                text_coords = (p + q) / 2
+                text_angle = np.degrees(np.arctan2(q[1] - p[1], q[0] - p[0])) % 180
                 plt.text(
-                    *((p + q) / 2),
-                    f"{d / true_diam * 100:.8f}%",
+                    *text_coords,
+                    f"{d / true_diam * 100:.4f}%",
                     fontsize=8,
                     alpha=0.5,
                     horizontalalignment="center",
                     verticalalignment="center",
+                    rotation=text_angle,
                 )
         plt.show()
     return true_diam
