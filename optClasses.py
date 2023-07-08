@@ -43,7 +43,6 @@ def pt_index_torus(p, points):
 
 
 class OptDiagramTorus:  # создание диаграммы, вычисление минимизируемой функции
-
     def set_mask(self):
         self.mask = np.zeros((self.batch_size, self.n, self.n), dtype=bool)
         for _ in range(self.batch_size):
@@ -103,9 +102,9 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
         x2 = torch.square(X)
         x2s = torch.sum(x2, -1)
         distm = (
-            -2 * X.matmul(X.transpose(-2, -1))
-            + x2s.unsqueeze(-1)
-            + x2s.unsqueeze(-2)
+                -2 * X.matmul(X.transpose(-2, -1))
+                + x2s.unsqueeze(-1)
+                + x2s.unsqueeze(-2)
         )
         dist_torus = torch.min(
             distm.unfold(1, 9, 9).unfold(2, 9, 9).reshape((self.batch_size, self.n, self.n, 81)), dim=-1
@@ -120,19 +119,19 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
 
 class OptPartitionTorus:  # поиск оптимального разбиения, мультистарт
     def __init__(
-        self,
-        d,
-        n,
-        n_iter_circ,
-        n_iter_part,
-        lr_start,
-        lr_decay,
-        precision_opt,
-        diam_tolerance,
-        messages,
-        may_plot,
-        batch_size,
-        device,
+            self,
+            d,
+            n,
+            n_iter_circ,
+            n_iter_part,
+            lr_start,
+            lr_decay,
+            precision_opt,
+            diam_tolerance,
+            messages,
+            may_plot,
+            batch_size,
+            device,
     ):
         self.best_diam = float("inf")
         self.best_points = None
@@ -176,9 +175,9 @@ class OptPartitionTorus:  # поиск оптимального разбиени
             # = x_i^2 + x_j^2 - 2 x_i x_j + y_i^2 + y_j^2 - 2 y_i y_j
             x2s = torch.sum(X ** 2, -1)
             distm = (
-                -2 * X.matmul(X.transpose(-2, -1))
-                + x2s.unsqueeze(-1)
-                + x2s.unsqueeze(-2)
+                    -2 * X.matmul(X.transpose(-2, -1))
+                    + x2s.unsqueeze(-1)
+                    + x2s.unsqueeze(-2)
             )
             distm = torch.where(mask, distm, float("inf"))
             y = torch.sum(-torch.min(torch.min(distm, dim=-1).values, dim=-1).values)
@@ -261,32 +260,15 @@ class OptPartitionTorus:  # поиск оптимального разбиени
         self.od.regions = self.best_poly.copy()
         return float(self.best_diam)
 
-    def from_file(self, filename):  # для тора не работает
-        with open(filename, "r") as f:
-            l = f.readlines()
-            poly = json.loads(l[3])
-            points = json.loads(l[4])
-            self.od = OptDiagramNd(self.poly, saved=(poly, points))
-            self.od.set_mask()
-            # d, dlist = self.od.diams()
-            self.best_diam = d.detach().numpy()
-            return self.best_diam
+    def get_data(self):
+        return {
+            "n": self.n,
+            "best_diam": self.best_diam,
+            "len_vertices": len(self.od.vertices),
+            "regions": self.od.regions,
+            "vertices": self.od.vertices.tolist()
+        }
 
-    def to_file(self, filename):  # запись в файл
+    def save_to_file(self, filename):  # запись в файл
         with open(filename, "w") as f:
-            f.write(str(self.n) + "\n")
-            f.write(str(self.best_diam) + "\n")  # максимальный диаметр
-            f.write(str(len(self.od.vertices)) + "\n")  # число вершин разбиения
-            json.dump(self.od.regions, f)  # полигоны, списки вершин
-            f.write("\n")
-            json.dump(self.od.vertices.tolist(), f)  # вершины
-
-    def to_string(self):
-        res = ""
-        res += str(self.n) + "\n"
-        res += str(self.best_diam) + "\n"
-        res += str(len(self.od.vertices)) + "\n"  # число вершин разбиения
-        res += json.dumps(self.od.regions)  # полигоны, списки вершин
-        res += "\n"
-        res += json.dumps(self.od.vertices.tolist())  # вершины
-        return res
+            json.dump(self.get_data(), f, indent=2)

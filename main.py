@@ -41,9 +41,10 @@ if __name__ == "__main__":
     print(f" n: {n} diam: {parts[n].best_diam:.8f}")
     
     if args.name_file_path is not None:
-        parts[n].to_file(args.name_file_path)
+        parts[n].save_to_file(args.name_file_path)
 
-    plot_partition(
-        parts[n],
-        diam_tolerance=args.diam_tolerance,
-    )
+    if args.may_plot:
+        plot_partition(
+            parts[n],
+            diam_tolerance=args.diam_tolerance,
+        )
