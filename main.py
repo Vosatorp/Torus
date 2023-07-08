@@ -50,7 +50,12 @@ if __name__ == "__main__":
             parts[n].multiple_runs(1)
             print(f" n: {n} diam: {parts[n].best_diam:.8f}")
             if args.save_file is not None:
-                parts[n].save_to_file(f"tor_{n}.json")
+                parts[n].save_to_file(f"jsons/tor_{n}.json")
+                plot_partition(
+                    parts[n],
+                    diam_tolerance=args.diam_tolerance,
+                    filename=f"pictures/tor_{n}.png"
+                )
     
     if n_start == n_end and args.name_file_path is not None:
         parts[n].save_to_file(args.name_file_path)
