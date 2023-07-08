@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 
 from arguments import get_args
 
-from optClasses import OptPartitionTorus, plot_partition
+from optClasses import OptPartitionTorus
+from utils import plot_partition
 
 
 if __name__ == "__main__":
