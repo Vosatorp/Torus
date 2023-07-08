@@ -9,14 +9,6 @@ from arguments import get_args
 from optClasses import OptPartitionTorus, plot_partition
 
 
-def f(n, runs):
-    part = OptPartitionTorus(2, n)
-    part.multiple_runs(runs)
-    plot_partition(part)
-    print(f"diam: {part.best_d:.6f}")
-    return part
-
-
 if __name__ == "__main__":
     args = get_args()
 

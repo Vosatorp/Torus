@@ -1,6 +1,4 @@
-import pdb
-
-import torch  # в коде на данный момент не реализованы вычисления на GPU
+import torch
 import numpy as np
 import json
 import matplotlib.pyplot as plt
@@ -12,28 +10,17 @@ from itertools import combinations
 from torch.autograd import Variable
 from itertools import product
 
+from utils import plot_partition, find_true_diam
+
 from arguments import get_args
 import pdb
 import tqdm
 
-pinf = 1e6
-
 no_improve_steps = 100
 min_lr = 1e-10
 comp_heu = 1000
-penalty_coef = 5.0
-
-eps = 1e-6
-eps2 = eps ** 2
 
 messages_iter = 1000
-almost_inf = 100.0
-
-eps = 1e-5
-sqrt2 = 2 ** 0.5
-
-eps = 1e-5
-sqrt2 = 2 ** 0.5
 
 
 def remap_pts(reg, remap):
@@ -45,15 +32,17 @@ def remap_pts(reg, remap):
 
 def eq_pts_torus(p1, p2):
     diff = p1 - p2
-    return np.all(np.abs(diff - np.round(diff)) < eps)
+    return np.all(np.abs(diff - np.round(diff)) < 1e-6)
+
+
+def pt_index_torus(p, points):
+    for i in range(points.shape[0]):
+        if eq_pts_torus(p, points[i, :]):
+            return i
+    return -1
 
 
 class OptDiagramTorus:  # создание диаграммы, вычисление минимизируемой функции
-    def pt_index_torus(self, p, points):
-        for i in range(points.shape[0]):
-            if eq_pts_torus(p, points[i, :]):
-                return i
-        return -1
 
     def set_mask(self):
         self.mask = np.zeros((self.batch_size, self.n, self.n), dtype=bool)
@@ -77,7 +66,7 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
         for v in product([-1.0, 0.0, 1.0], repeat=2):
             v = torch.tensor(v)
             xl.append(x + v)
-        X = torch.cat(xl, dim=-2)  # [9n, 2] --> [B, 9n, 2]
+        X = torch.cat(xl, dim=-2)
         vor = [Voronoi(X.detach().numpy()[_]) for _ in range(self.batch_size)]
         self.regions = [list() for i in range(self.batch_size)]
         for _ in range(self.batch_size):
@@ -87,9 +76,9 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
         self.vertices = np.array([
             vor[_].vertices[np.all((0 <= vor[_].vertices) & (vor[_].vertices < 1), axis=1)]
             for _ in range(self.batch_size)
-        ])  # [2n, 2] --> [B, 2n, 2]
+        ])
         self.n = self.vertices.shape[1]
-        remap = [{} for i in range(self.batch_size)]
+        remap = [{} for _ in range(self.batch_size)]
         for _ in range(self.batch_size):
             for i in range(self.n):
                 for j in range(len(vor[_].vertices)):
@@ -121,8 +110,8 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
         dist_torus = torch.min(
             distm.unfold(1, 9, 9).unfold(2, 9, 9).reshape((self.batch_size, self.n, self.n, 81)), dim=-1
         ).values
-        dist_torus_x = dist_torus * self.mask
-        squared_diams = torch.max(torch.max(dist_torus_x, dim=-1).values, dim=-1).values
+        dist_torus *= self.mask
+        squared_diams = torch.max(torch.max(dist_torus, dim=-1).values, dim=-1).values
         if get_diams:
             return torch.sum(squared_diams), squared_diams.detach().cpu().numpy() ** 0.5
         else:
@@ -145,7 +134,7 @@ class OptPartitionTorus:  # поиск оптимального разбиени
         batch_size,
         device,
     ):
-        self.best_diam = float('inf')
+        self.best_diam = float("inf")
         self.best_points = None
         self.od = None
         self.n_iter1 = n_iter_circ  # максимальное число итераций при оптимизации упаковки кругов
@@ -181,8 +170,7 @@ class OptPartitionTorus:  # поиск оптимального разбиени
             xl = []
             for v in torch.tensor(list(product([-1, 0, 1], repeat=2)), device=self.device):
                 xl.append(x + v)
-            X = torch.cat(xl, dim=-2).to(self.device)  # [n1, 2], [b, n1, 2]
-            # Attention above about batch_size
+            X = torch.cat(xl, dim=-2).to(self.device)
 
             # p[i] - p[j] = (x_i - x_j)^2 + (y_i - y_j)^2 =
             # = x_i^2 + x_j^2 - 2 x_i x_j + y_i^2 + y_j^2 - 2 y_i y_j
@@ -192,9 +180,9 @@ class OptPartitionTorus:  # поиск оптимального разбиени
                 + x2s.unsqueeze(-1)
                 + x2s.unsqueeze(-2)
             )
-            distm = torch.where(mask, distm, float('inf'))
+            distm = torch.where(mask, distm, float("inf"))
             y = torch.sum(-torch.min(torch.min(distm, dim=-1).values, dim=-1).values)
-            self.history_packing.append(abs(y.cpu().item()) ** 0.5 / 2)
+            self.history_packing.append(abs(y.cpu().item()) ** 0.5 / 2 / self.batch_size)
             y.backward()
             optimizer.step()
         if self.may_plot:
@@ -205,40 +193,35 @@ class OptPartitionTorus:  # поиск оптимального разбиени
         return x.cpu().detach().numpy()
 
     def random_partition_torus(self, x0):  # оптимизация разбиения
-        # self.od = OptDiagramNd(self.poly, x0)
         self.od = OptDiagramTorus(x0, batch_size=self.batch_size, device=self.device)
         if not self.od.ok:
-            return almost_inf, None
+            return float("inf"), None
         x = torch.tensor(self.od.vertices).to(self.device)
         lr = self.lr_start
         x = x.requires_grad_()
         optimizer = torch.optim.Adam([x], lr=lr)
-        y_best = almost_inf
+        y_best = float("inf")
         no_improve = 0
-        precise = False
         for i in tqdm.tqdm(range(1, self.n_iter2 + 1)):
-            #  100 == 1:
-            #     self.od.vertices = x[0].detach().cpu().numpy()
-            #     plot_partition(self, diam_tolerance=self.diam_tolerance)
             optimizer.zero_grad()
             y, _ = self.od.forward(x)
             y.backward()
             optimizer.step()
-            ycur = y.cpu().detach().numpy()
-            self.history_partition.append(ycur ** 0.5)
-            if ycur < y_best:
-                y_best = ycur
+            y_curr = y.cpu().detach().numpy()
+            self.history_partition.append((y_curr / self.batch_size) ** 0.5)
+            if y_curr < y_best:
+                y_best = y_curr
                 no_improve = 0
             else:
                 no_improve += 1
             if i % messages_iter == 0:
                 if self.messages >= 1:
-                    print(i, "   d = ", float(ycur) ** 0.5)
+                    print(i, "   d = ", float(y_curr) ** 0.5)
             if no_improve > no_improve_steps:
                 lr = lr * self.lr_decay
                 if lr < min_lr:
                     break
-                if (ycur - self.best_diam) / lr > comp_heu:
+                if (y_curr - self.best_diam) / lr > comp_heu:
                     break
                 for g in optimizer.param_groups:
                     g["lr"] = lr
@@ -268,7 +251,6 @@ class OptPartitionTorus:  # поиск оптимального разбиени
             ])
             index_min = np.argmin(true_diams)
             if points is not None and true_diams[index_min] < self.best_diam:
-            # if points is not None and diams[index_min] < self.best_diam:
                 self.best_diam = true_diams[index_min]
                 self.best_points = points[index_min].copy()
                 self.best_poly = self.od.regions[index_min].copy()
@@ -291,7 +273,6 @@ class OptPartitionTorus:  # поиск оптимального разбиени
             return self.best_diam
 
     def to_file(self, filename):  # запись в файл
-        # TODO: переделать в json
         with open(filename, "w") as f:
             f.write(str(self.n) + "\n")
             f.write(str(self.best_diam) + "\n")  # максимальный диаметр
@@ -309,149 +290,3 @@ class OptPartitionTorus:  # поиск оптимального разбиени
         res += "\n"
         res += json.dumps(self.od.vertices.tolist())  # вершины
         return res
-
-    def diams(self):  # для тора не работает
-        best_diam = self.best_diam
-        res = []
-        for p in self.od.regions:
-            for i, j in combinations(p, 2):
-                curr_diam = np.linalg.norm(self.od.vertices[i] - self.od.vertices[j])
-                if self.diam_tolerance * best_diam < curr_diam:
-                    res.append((i, j))
-        return res
-
-
-def find_true_diam(pts, regions):
-    true_diam = 0
-    if pts is None:
-        return float("inf")
-    for p in regions:
-        pcur = []
-        start_i = 0
-        min_dist = 10.0
-        target = np.array([0.5, 0.5])
-        for i in range(len(p)):
-            if p is None:
-                return float("inf")
-            if p[i] is None:
-                return float("inf")
-            if pts[p[i]] is None:
-                return float("inf")
-            cur_p = find_nearest(pts[p[i]])
-            dist = np.linalg.norm(cur_p - target)
-            if dist < min_dist:
-                min_dist = dist
-                start_i = i
-        p_pre = pts[p[start_i]]
-        pcur.append(p_pre)
-        for i in p[start_i + 1:] + p[:start_i]:
-            mp = find_nearest(pts[i], p_pre)
-            pcur.append(mp.copy())
-            p_pre = mp.copy()
-        pcur = np.array(pcur[-len(p):])
-        for i in range(len(pcur) - 1, -1, -1):
-            mp = find_nearest(pcur[i], pcur[(i + 1) % len(pcur)])
-            pcur[i] = mp.copy()
-        pcur = pcur[-len(p):]
-        # find honest diameter of part and relax with true_diam
-        if find_true_diam:
-            for i in range(len(pcur)):
-                for j in range(i + 1, len(pcur)):
-                    true_diam = max(true_diam, np.linalg.norm(pcur[i] - pcur[j]))
-    return true_diam
-
-
-def draw_square():
-    plt.plot([0, 1], [0, 0], "k")
-    plt.plot([0, 0], [0, 1], "k")
-    plt.plot([1, 1], [0, 1], "k")
-    plt.plot([0, 1], [1, 1], "k")
-
-
-def find_nearest(point, target=np.array([0.5, 0.5])):
-    best_points = point.copy()
-    min_dist = 10.0
-    for v in product([-1.0, 0.0, 1.0], repeat=2):
-        cur_p = point + np.array(v)
-        dist = np.linalg.norm(cur_p - target)
-        if dist < min_dist:
-            min_dist = dist
-            best_points = cur_p.copy()
-    return best_points
-
-
-def plot_partition(
-        part,
-        diam_tolerance,
-        find_true_diam=True,
-        plot=True,
-):
-    """
-    Рисует разбиения тора так чтобы части выглядели нормально,
-    находя нужные экземляры точек
-    """
-    if plot:
-        fig = plt.figure(figsize=(10, 10))
-    pts = part.od.vertices
-    true_diam = 0
-    segments = []
-    for p in part.od.regions:
-        pcur = []
-        start_i = 0
-        min_dist = 10.0
-        target = np.array([0.5, 0.5])
-        for i in range(len(p)):
-            cur_p = find_nearest(pts[p[i]])
-            dist = np.linalg.norm(cur_p - target)
-            if dist < min_dist:
-                min_dist = dist
-                start_i = i
-        p_pre = pts[p[start_i]]
-        pcur.append(p_pre)
-        for i in p[start_i + 1:] + p[:start_i]:
-            mp = find_nearest(pts[i], p_pre)
-            pcur.append(mp.copy())
-            p_pre = mp.copy()
-        pcur = np.array(pcur[-part.n:])
-        for i in range(len(pcur) - 1, -1, -1):
-            mp = find_nearest(pcur[i], pcur[(i + 1) % len(pcur)])
-            pcur[i] = mp.copy()
-        pcur = pcur[-part.n:]
-        # find honest diameter of part and relax with true_diam
-        if find_true_diam:
-            for i in range(len(pcur)):
-                for j in range(i + 1, len(pcur)):
-                    curr_diam = np.linalg.norm(pcur[i] - pcur[j])
-                    true_diam = max(true_diam, curr_diam)
-                    segments.append((pcur[i], pcur[j], curr_diam))
-        if plot:
-            midp = np.average(pcur, axis=0)
-            plt.text(*midp, f"{len(pcur)}", fontsize=16)
-            plt.fill(*zip(*pcur), alpha=0.4)
-    if plot:
-        draw_square()
-        plt.axis("equal")
-        # plt.xlim(-0.2, 1.2)
-        # plt.ylim(-0.2, 1.2)
-        print(f" n: {part.n}   diam: {part.best_diam:.8}   true_diam: {true_diam:.8f}")
-        plt.title(
-            f" n: {part.n}   diam: {part.best_diam:.8f}   true_diam: {true_diam:.8f}",
-            fontsize=16,
-        )
-        # draw diams
-        for p, q, d in segments:
-            if d > true_diam * diam_tolerance:
-                plt.plot([p[0], q[0]], [p[1], q[1]], alpha=0.5, linestyle="--")
-                text_coords = (p + q) / 2
-                text_angle = np.degrees(np.arctan2(q[1] - p[1], q[0] - p[0])) % 180
-                plt.text(
-                    *text_coords,
-                    f"{d / true_diam * 100:.4f}%",
-                    fontsize=8,
-                    alpha=0.5,
-                    horizontalalignment="center",
-                    verticalalignment="center",
-                    rotation=text_angle,
-                )
-        plt.show()
-    return true_diam
