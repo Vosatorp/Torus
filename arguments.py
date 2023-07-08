@@ -8,6 +8,8 @@ def get_args():
         type=int,
         help="Number of partitions",
     )
+    parser.add_argument("--n_start", type=int)
+    parser.add_argument("--n_end", type=int)
     parser.add_argument(
         "--num_runs",
         type=int,
@@ -18,6 +20,12 @@ def get_args():
         "--name_file_path",
         type=str,
         help="Path to the file with the name"
+    )
+    parser.add_argument(
+        "--save_file",
+        type=bool,
+        default=True,
+        help="Whether to save to a file should be specified only in the case of n_start < n_end",
     )
     parser.add_argument(
         "--n_iter_circ",
