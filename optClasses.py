@@ -164,7 +164,8 @@ class OptPartitionTorus:  # поиск оптимального разбиени
 
         optimizer = torch.optim.Adam([x.requires_grad_()], lr=lr)
         mask = torch.tril(torch.ones(n1, n1, dtype=torch.bool), diagonal=-1).to(self.device)
-        for i in tqdm.tqdm(range(1, self.n_iter1 + 1)):
+        pbar=tqdm.tqdm(total=self.n_iter1)
+        for i in range(1, self.n_iter1 + 1):
             optimizer.zero_grad()
             xl = []
             for v in torch.tensor(list(product([-1, 0, 1], repeat=2)), device=self.device):
@@ -181,9 +182,12 @@ class OptPartitionTorus:  # поиск оптимального разбиени
             )
             distm = torch.where(mask, distm, float("inf"))
             y = torch.sum(-torch.min(torch.min(distm, dim=-1).values, dim=-1).values)
-            self.history_packing.append(abs(y.cpu().item()) ** 0.5 / 2 / self.batch_size)
+            curr_avg_radius = (abs(y.cpu().item()) / self.batch_size) ** 0.5 / 2
+            self.history_packing.append(curr_avg_radius)
             y.backward()
             optimizer.step()
+            pbar.set_postfix(avg_radius=curr_avg_radius)
+            pbar.update(1)
         if self.may_plot:
             plt.plot(self.history_packing)
             plt.title("Packing of Circles")
@@ -201,21 +205,22 @@ class OptPartitionTorus:  # поиск оптимального разбиени
         optimizer = torch.optim.Adam([x], lr=lr)
         y_best = float("inf")
         no_improve = 0
-        for i in tqdm.tqdm(range(1, self.n_iter2 + 1)):
+        pbar = tqdm.tqdm(total=self.n_iter2)
+        for i in range(1, self.n_iter2 + 1):
             optimizer.zero_grad()
             y, _ = self.od.forward(x)
             y.backward()
             optimizer.step()
-            y_curr = y.cpu().detach().numpy()
-            self.history_partition.append((y_curr / self.batch_size) ** 0.5)
+            y_curr = float(y.cpu().detach().numpy())
+            curr_avg_max_diam = (y_curr / self.batch_size) ** 0.5
+            self.history_partition.append(curr_avg_max_diam)
+            pbar.set_postfix(avg_max_diam=curr_avg_max_diam)
+            pbar.update(1)
             if y_curr < y_best:
                 y_best = y_curr
                 no_improve = 0
             else:
                 no_improve += 1
-            if i % messages_iter == 0:
-                if self.messages >= 1:
-                    print(i, "   d = ", float(y_curr) ** 0.5)
             if no_improve > no_improve_steps:
                 lr = lr * self.lr_decay
                 if lr < min_lr:
