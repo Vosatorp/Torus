@@ -67,6 +67,7 @@ def plot_partition(
     diam_tolerance,
     is_find_true_diam=True,
     plot=True,
+    filename=None,
 ):
     """
     Рисует разбиения тора так чтобы части выглядели нормально,
@@ -136,4 +137,6 @@ def plot_partition(
                     rotation=text_angle,
                 )
         plt.show()
+        if filename is not None:
+            plt.savefig(filename)
     return true_diam
