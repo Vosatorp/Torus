@@ -73,63 +73,54 @@ def find_true_diam(pts, regions):
     if pts is None:
         return float("inf")
     polygons, shifts = get_correct_partitions(pts, regions)
-    true_diam = 0
-    for polygon in polygons:
-        true_diam = max(true_diam, np.max(pdist(polygon)))
-    return true_diam
+    return max(np.max(pdist(polygon)) for polygon in polygons)
 
 
 def plot_partition(
     part,
     diam_tolerance,
-    plot=True,
     filename=None,
 ):
     """
     Рисует разбиения тора так чтобы части выглядели нормально,
     находя нужные экземляры точек
     """
-    if plot:
-        fig = plt.figure(figsize=(10, 10))
+    fig = plt.figure(figsize=(10, 10))
     polygons, shifts = get_correct_partitions(part.od.vertices, part.od.regions)
-    true_diam = find_true_diam(part.od.vertices, part.od.regions)
+    true_diam = max(np.max(pdist(polygon)) for polygon in polygons)
     diameters = []
     for polygon in polygons:
-        if plot:
-            midp = np.average(polygon, axis=0)
-            plt.text(*midp, f"{len(polygon)}", fontsize=16)
-            plt.fill(*zip(*polygon), alpha=0.4)
-            diameters.extend([
-                (polygon[i], polygon[j])
-                for i in range(len(polygon)) for j in range(i + 1, len(polygon))
-                if np.linalg.norm(polygon[i] - polygon[j]) > true_diam * diam_tolerance
-            ])
-    if plot:
-        draw_square()
-        plt.axis("equal")
-        # plt.xlim(-0.2, 1.2)
-        # plt.ylim(-0.2, 1.2)
-        print(f" n: {part.n}   diam: {part.best_diam:.8}   true_diam: {true_diam:.8f}")
-        plt.title(
-            f" n: {part.n}   diam: {part.best_diam:.8f}   true_diam: {true_diam:.8f}",
-            fontsize=16,
+        center = np.average(polygon, axis=0)
+        plt.text(*center, f"{len(polygon)}", fontsize=16)
+        plt.fill(*zip(*polygon), alpha=0.4)
+        diameters.extend([
+            (polygon[i], polygon[j])
+            for i in range(len(polygon)) for j in range(i + 1, len(polygon))
+            if np.linalg.norm(polygon[i] - polygon[j]) > true_diam * diam_tolerance
+        ])
+    draw_square()
+    plt.axis("equal")
+    print(f" n: {part.n}   diam: {part.best_diam:.8}   true_diam: {true_diam:.8f}")
+    plt.title(
+        f" n: {part.n}   diam: {part.best_diam:.8f}   true_diam: {true_diam:.8f}",
+        fontsize=16,
+    )
+    # draw diams
+    for p, q in diameters:
+        d = np.linalg.norm(p - q)
+        plt.plot([p[0], q[0]], [p[1], q[1]], alpha=0.5, linestyle="--")
+        text_coords = (p + q) / 2
+        text_angle = np.degrees(np.arctan2(q[1] - p[1], q[0] - p[0])) % 180
+        plt.text(
+            *text_coords,
+            f"{d / true_diam * 100:.4f}%",
+            fontsize=8,
+            alpha=0.5,
+            horizontalalignment="center",
+            verticalalignment="center",
+            rotation=text_angle,
         )
-        # draw diams
-        for p, q in diameters:
-            d = np.linalg.norm(p - q)
-            plt.plot([p[0], q[0]], [p[1], q[1]], alpha=0.5, linestyle="--")
-            text_coords = (p + q) / 2
-            text_angle = np.degrees(np.arctan2(q[1] - p[1], q[0] - p[0])) % 180
-            plt.text(
-                *text_coords,
-                f"{d / true_diam * 100:.4f}%",
-                fontsize=8,
-                alpha=0.5,
-                horizontalalignment="center",
-                verticalalignment="center",
-                rotation=text_angle,
-            )
-        plt.show()
-        if filename is not None:
-            plt.savefig(filename)
+    plt.show()
+    if filename is not None:
+        plt.savefig(filename)
     return true_diam
