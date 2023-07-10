@@ -1,46 +1,21 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from itertools import product
+from scipy.spatial.distance import pdist
 
 
-def find_true_diam(pts, regions):
-    true_diam = 0
-    if pts is None:
-        return float("inf")
-    for p in regions:
-        pcur = []
-        start_i = 0
-        min_dist = 10.0
-        target = np.array([0.5, 0.5])
-        for i in range(len(p)):
-            if p is None:
-                return float("inf")
-            if p[i] is None:
-                return float("inf")
-            if pts[p[i]] is None:
-                return float("inf")
-            cur_p = find_nearest(pts[p[i]])
-            dist = np.linalg.norm(cur_p - target)
-            if dist < min_dist:
-                min_dist = dist
-                start_i = i
-        p_pre = pts[p[start_i]]
-        pcur.append(p_pre)
-        for i in p[start_i + 1:] + p[:start_i]:
-            mp = find_nearest(pts[i], p_pre)
-            pcur.append(mp.copy())
-            p_pre = mp.copy()
-        pcur = np.array(pcur[-len(p) :])
-        for i in range(len(pcur) - 1, -1, -1):
-            mp = find_nearest(pcur[i], pcur[(i + 1) % len(pcur)])
-            pcur[i] = mp.copy()
-        pcur = pcur[-len(p) :]
-        # find honest diameter of part and relax with true_diam
-        if find_true_diam:
-            for i in range(len(pcur)):
-                for j in range(i + 1, len(pcur)):
-                    true_diam = max(true_diam, np.linalg.norm(pcur[i] - pcur[j]))
-    return true_diam
+def find_nearest(point, target):
+    best_point = point.copy()
+    min_dist = 10.0
+    corr_shift = np.array([0.0, 0.0])
+    for shift in product([-1.0, 0.0, 1.0], repeat=2):
+        cur_p = point + np.array(shift)
+        dist = np.linalg.norm(cur_p - target)
+        if dist < min_dist:
+            min_dist = dist
+            best_point = cur_p.copy()
+            corr_shift = shift
+    return best_point, corr_shift
 
 
 def draw_square():
@@ -50,16 +25,58 @@ def draw_square():
     plt.plot([0, 1], [1, 1], "k")
 
 
-def find_nearest(point, target=np.array([0.5, 0.5])):
-    best_points = point.copy()
-    min_dist = 10.0
-    for v in product([-1.0, 0.0, 1.0], repeat=2):
-        cur_p = point + np.array(v)
-        dist = np.linalg.norm(cur_p - target)
-        if dist < min_dist:
-            min_dist = dist
-            best_points = cur_p.copy()
-    return best_points
+def get_correct_partitions(pts, regions):
+    if pts is None:
+        return float("inf")
+    corr_regions = []
+    corr_regions_shifts = []
+    for p in regions:
+        start_i = 0
+        min_dist = 10.0
+        center = np.array([0.5, 0.5])
+        for i in range(len(p)):
+            if p is None:
+                return float("inf")
+            if p[i] is None:
+                return float("inf")
+            if pts[p[i]] is None:
+                return float("inf")
+            cur_p, _ = find_nearest(pts[p[i]], center)
+            dist = np.linalg.norm(cur_p - center)
+            if dist < min_dist:
+                min_dist = dist
+                start_i = i
+        p_pre = pts[p[start_i]]
+        corr_polygon = [p_pre]
+        corr_shifts = [np.array([0.0, 0.0])]
+        for i in p[start_i + 1:] + p[:start_i]:
+            nearest_point, shift = find_nearest(pts[i], p_pre)
+            corr_polygon.append(nearest_point)
+            corr_shifts.append(shift)
+            p_pre = nearest_point.copy()
+        corr_polygon = np.array(corr_polygon[-len(p):])
+        curr_shifts = np.array(corr_shifts[-len(p):])
+        for i in range(len(corr_polygon) - 1, -1, -1):
+            nearest_point, shift = find_nearest(
+                corr_polygon[i],
+                corr_polygon[(i + 1) % len(corr_polygon)]
+            )
+            corr_polygon[i] = nearest_point
+            curr_shifts[i] = shift
+        corr_polygon = corr_polygon[-len(p):]
+        corr_regions.append(corr_polygon)
+        corr_regions_shifts.append(curr_shifts)
+    return corr_regions, corr_regions_shifts
+
+
+def find_true_diam(pts, regions):
+    if pts is None:
+        return float("inf")
+    polygons, shifts = get_correct_partitions(pts, regions)
+    true_diam = 0
+    for polygon in polygons:
+        true_diam = max(true_diam, np.max(pdist(polygon)))
+    return true_diam
 
 
 def plot_partition(
@@ -75,42 +92,19 @@ def plot_partition(
     """
     if plot:
         fig = plt.figure(figsize=(10, 10))
-    pts = part.od.vertices
-    true_diam = 0
-    segments = []
-    for p in part.od.regions:
-        pcur = []
-        start_i = 0
-        min_dist = 10.0
-        target = np.array([0.5, 0.5])
-        for i in range(len(p)):
-            cur_p = find_nearest(pts[p[i]])
-            dist = np.linalg.norm(cur_p - target)
-            if dist < min_dist:
-                min_dist = dist
-                start_i = i
-        p_pre = pts[p[start_i]]
-        pcur.append(p_pre)
-        for i in p[start_i + 1:] + p[:start_i]:
-            mp = find_nearest(pts[i], p_pre)
-            pcur.append(mp.copy())
-            p_pre = mp.copy()
-        pcur = np.array(pcur[-part.n :])
-        for i in range(len(pcur) - 1, -1, -1):
-            mp = find_nearest(pcur[i], pcur[(i + 1) % len(pcur)])
-            pcur[i] = mp.copy()
-        pcur = pcur[-part.n :]
-        # find honest diameter of part and relax with true_diam
-        if is_find_true_diam:
-            for i in range(len(pcur)):
-                for j in range(i + 1, len(pcur)):
-                    curr_diam = np.linalg.norm(pcur[i] - pcur[j])
-                    true_diam = max(true_diam, curr_diam)
-                    segments.append((pcur[i], pcur[j], curr_diam))
+    polygons, shifts = get_correct_partitions(part.od.vertices, part.od.regions)
+    true_diam = find_true_diam(part.od.vertices, part.od.regions)
+    diameters = []
+    for polygon in polygons:
         if plot:
-            midp = np.average(pcur, axis=0)
-            plt.text(*midp, f"{len(pcur)}", fontsize=16)
-            plt.fill(*zip(*pcur), alpha=0.4)
+            midp = np.average(polygon, axis=0)
+            plt.text(*midp, f"{len(polygon)}", fontsize=16)
+            plt.fill(*zip(*polygon), alpha=0.4)
+            diameters.extend([
+                (polygon[i], polygon[j])
+                for i in range(len(polygon)) for j in range(i + 1, len(polygon))
+                if np.linalg.norm(polygon[i] - polygon[j]) > true_diam * diam_tolerance
+            ])
     if plot:
         draw_square()
         plt.axis("equal")
@@ -122,20 +116,20 @@ def plot_partition(
             fontsize=16,
         )
         # draw diams
-        for p, q, d in segments:
-            if d > true_diam * diam_tolerance:
-                plt.plot([p[0], q[0]], [p[1], q[1]], alpha=0.5, linestyle="--")
-                text_coords = (p + q) / 2
-                text_angle = np.degrees(np.arctan2(q[1] - p[1], q[0] - p[0])) % 180
-                plt.text(
-                    *text_coords,
-                    f"{d / true_diam * 100:.4f}%",
-                    fontsize=8,
-                    alpha=0.5,
-                    horizontalalignment="center",
-                    verticalalignment="center",
-                    rotation=text_angle,
-                )
+        for p, q in diameters:
+            d = np.linalg.norm(p - q)
+            plt.plot([p[0], q[0]], [p[1], q[1]], alpha=0.5, linestyle="--")
+            text_coords = (p + q) / 2
+            text_angle = np.degrees(np.arctan2(q[1] - p[1], q[0] - p[0])) % 180
+            plt.text(
+                *text_coords,
+                f"{d / true_diam * 100:.4f}%",
+                fontsize=8,
+                alpha=0.5,
+                horizontalalignment="center",
+                verticalalignment="center",
+                rotation=text_angle,
+            )
         plt.show()
         if filename is not None:
             plt.savefig(filename)

@@ -56,7 +56,13 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
             points,
             batch_size,
             device,
+            saved_data={}
     ):
+        if saved_data:
+            self.vertices = saved_data["vertices"]
+            self.regions = saved_data["regions"]
+            self.set_mask()
+            return
         self.mask = None
         self.batch_size = batch_size
         self.device = device
