@@ -82,7 +82,6 @@ def find_true_diam(pts, regions):
 def plot_partition(
     part,
     diam_tolerance,
-    is_find_true_diam=True,
     plot=True,
     filename=None,
 ):

@@ -280,6 +280,6 @@ class OptPartitionTorus:  # поиск оптимального разбиени
             "vertices": self.od.vertices.tolist()
         }
 
-    def save_to_file(self, filename):  # запись в файл
+    def save_to_file(self, filename):
         with open(filename, "w") as f:
             json.dump(self.get_data(), f, indent=2)
