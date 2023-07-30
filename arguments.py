@@ -3,6 +3,7 @@ import argparse
 
 def get_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--dimension", type=int, default=2)
     parser.add_argument(
         "--n",
         type=int,
@@ -13,7 +14,7 @@ def get_args():
     parser.add_argument(
         "--num_runs",
         type=int,
-        default=10,
+        default=2,
         help="Number of optimization attempts (default: 10)",
     )
     parser.add_argument(

@@ -32,7 +32,7 @@ if __name__ == "__main__":
     parts = [None] * (n_end + 1)
     for n in range(n_start, n_end + 1):
         parts[n] = OptPartitionTorus(
-            d=2,
+            d=args.dimension,
             n=n,
             n_iter_circ=args.n_iter_circ,
             n_iter_part=args.n_iter_part,

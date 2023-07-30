@@ -66,9 +66,11 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
         self.mask = None
         self.batch_size = batch_size
         self.device = device
+        self.d = points.shape[-1]
         x = torch.tensor(points)
         xl = []
-        for v in product([-1.0, 0.0, 1.0], repeat=2):
+        print("points", points.shape)
+        for v in product([-1.0, 0.0, 1.0], repeat=self.d):
             v = torch.tensor(v)
             xl.append(x + v)
         X = torch.cat(xl, dim=-2)
@@ -83,6 +85,8 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
             for _ in range(self.batch_size)
         ])
         self.n = self.vertices.shape[1]
+        print("self.n:", self.n, x.shape)
+        # pdb.set_trace()
         remap = [{} for _ in range(self.batch_size)]
         for _ in range(self.batch_size):
             for i in range(self.n):
@@ -102,7 +106,7 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
     def forward(self, x, get_diams=False):
         xl = []
         for i in range(self.n):
-            for v in torch.tensor(list(product([-1, 0, 1], repeat=2)), device=self.device):
+            for v in torch.tensor(list(product([-1, 0, 1], repeat=self.d)), device=self.device):
                 xl.append(x[..., i, :] + v)
         X = torch.stack(xl).permute(1, 0, 2).to(self.device)
         x2 = torch.square(X)
@@ -112,8 +116,9 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
                 + x2s.unsqueeze(-1)
                 + x2s.unsqueeze(-2)
         )
+        k = 3 ** self.d
         dist_torus = torch.min(
-            distm.unfold(1, 9, 9).unfold(2, 9, 9).reshape((self.batch_size, self.n, self.n, 81)), dim=-1
+            distm.unfold(1, k, k).unfold(2, k, k).reshape((self.batch_size, self.n, self.n, k * k)), dim=-1
         ).values
         dist_torus *= self.mask
         squared_diams = torch.max(torch.max(dist_torus, dim=-1).values, dim=-1).values
@@ -170,11 +175,11 @@ class OptPartitionTorus:  # поиск оптимального разбиени
 
         optimizer = torch.optim.Adam([x.requires_grad_()], lr=lr)
         mask = torch.tril(torch.ones(n1, n1, dtype=torch.bool), diagonal=-1).to(self.device)
-        pbar=tqdm.tqdm(total=self.n_iter1)
+        pbar = tqdm.tqdm(total=self.n_iter1)
         for i in range(1, self.n_iter1 + 1):
             optimizer.zero_grad()
             xl = []
-            for v in torch.tensor(list(product([-1, 0, 1], repeat=2)), device=self.device):
+            for v in torch.tensor(list(product([-1, 0, 1], repeat=self.d)), device=self.device):
                 xl.append(x + v)
             X = torch.cat(xl, dim=-2).to(self.device)
 
@@ -283,3 +288,37 @@ class OptPartitionTorus:  # поиск оптимального разбиени
     def save_to_file(self, filename):
         with open(filename, "w") as f:
             json.dump(self.get_data(), f, indent=2)
+
+
+def OptColoring:
+    def __init__(
+            self,
+
+    ):
+        self.dual_graph = None
+        self.diagram = None
+        self.colors = None
+
+    def paint(self):
+        """
+
+        :param self:
+
+        painting the diagram in accordance with the prohibition
+        to be monochrome if the distance is no more than two in a dual graph
+
+        :return:
+        """
+        self.colors = ...
+        pass
+
+    def optimize_painting(self):
+        # make random optimization
+        pass
+
+    def random_coloring(self, n):
+        # packing n circles in rotated parallelepiped
+        # build Voronoi diagram
+        # paint dual_graph
+        # optimize painting
+        pass
