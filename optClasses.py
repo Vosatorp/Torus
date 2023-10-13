@@ -290,7 +290,7 @@ class OptPartitionTorus:  # поиск оптимального разбиени
             json.dump(self.get_data(), f, indent=2)
 
 
-def OptColoring:
+class OptColoring:
     def __init__(
             self,
 
