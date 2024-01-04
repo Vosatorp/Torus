@@ -112,12 +112,44 @@ def torus_graph(n, r2):
     return g
 
 
+def torus_triangle_graph(n, r2):
+    k = int(n / np.sqrt(3))  ## square N x (2 * k)
+    vertices = []
+
+    # find vertices coordinates on the triangle grid
+    for j in range(2 * k):
+        block_num = j // 2
+        for i in range(-block_num, n - block_num):
+            vertices.append((i, j))
+
+    num_v = len(vertices)
+
+    # function for the checking of the edge existence
+    def check_edge(coords1, coords2):
+        a = coords2[0] - coords1[0]
+        b = coords2[1] - coords1[1]
+
+        l1 = abs(a + b / 2)
+        l2 = abs(b * np.sqrt(3) / 2)
+
+        len2 = min(l1, n - l1) ** 2 + min(l2, n - l2) ** 2
+        return len2 >= r2
+
+    g = nx.Graph()
+    for i in range(num_v - 1):
+        for j in range(i + 1, num_v):
+            if check_edge(vertices[i], vertices[j]):
+                g.add_edge(i, j)
+    return g
+
+
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--n_colors", type=int)
     parser.add_argument("--grid_start", type=int)
     parser.add_argument("--grid_end", type=int, default=100500)
     parser.add_argument("--grid_step", type=int)
+    parser.add_argument("--grid_type", type=str, default='square')  # grid type: square or triangle based
     parser.add_argument("--percent_dev", type=float, default=1.0)
     parser.add_argument("--diam", type=float)
     parser.add_argument("--timer", type=int, default=3600)
@@ -129,7 +161,7 @@ def get_args():
 
 if __name__ == "__main__":
     args = get_args()
-    
+
     if args.seed is None:
         args.seed = np.random.randint(0, 1000000)
     np.random.seed(args.seed)
@@ -143,13 +175,16 @@ if __name__ == "__main__":
 
         while right - left > 1:
             square_diameter = (left + right) // 2
-            g = torus_graph(grid_size, square_diameter)
+            if args.grid_type == 'square':  # choose grid
+                g = torus_graph(grid_size, square_diameter)
+            else:
+                g = torus_triangle_graph(grid_size, square_diameter)
 
             if args.init_radius is not None:
                 init_res = init_circles_five(grid_size, radius=args.radius)
             else:
                 init_res = []
-            
+
             cnf_name = f'cnfs/{args.n_colors}_test_{grid_size}_{square_diameter}_seed_{args.seed}.cnf'
             write_cnf(g, cnf_name, size=0, n_colors=args.n_colors, init=init_res)
 
@@ -174,6 +209,7 @@ if __name__ == "__main__":
                 timer = timer * 2
                 print("Doubling the timer: ", timer)
         print("Summary")
+        print(f"Grid type: {args.grid_type}")
         print(f" left: {left}  right: {right}  ")
         print(f" lower diameter estimate: {left ** 0.5 / grid_size:.6f}")
         print()
