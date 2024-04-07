@@ -1,4 +1,5 @@
 import pdb
+import os
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -112,7 +113,6 @@ def get_correct_partitions(pts, regions):
             corr_polygon[i] = nearest_point
             curr_shifts[i] = shift
         corr_polygon = corr_polygon[-len(p):]
-        corr_polygon = np.array([pts[i] for i in p])  ## temp
         corr_regions.append(corr_polygon)
         corr_regions_shifts.append(curr_shifts)
     return corr_regions, corr_regions_shifts
@@ -190,6 +190,9 @@ def plot_partition(
             )
     plt.show()
     if filename is not None:
+        directory = os.path.dirname(filename)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
         plt.savefig(filename)
 
 

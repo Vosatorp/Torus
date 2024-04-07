@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import json
 import matplotlib.pyplot as plt
+import os
 
 from scipy.spatial import Voronoi
 from scipy.spatial import ConvexHull
@@ -69,7 +70,6 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
         self.d = points.shape[-1]
         x = torch.tensor(points)
         xl = []
-        print("points", points.shape)
         for v in product([-1.0, 0.0, 1.0], repeat=self.d):
             v = torch.tensor(v)
             xl.append(x + v)
@@ -85,7 +85,6 @@ class OptDiagramTorus:  # создание диаграммы, вычислен�
             for _ in range(self.batch_size)
         ])
         self.n = self.vertices.shape[1]
-        print("self.n:", self.n, x.shape)
         # pdb.set_trace()
         remap = [{} for _ in range(self.batch_size)]
         for _ in range(self.batch_size):
@@ -286,6 +285,9 @@ class OptPartitionTorus:  # поиск оптимального разбиени
         }
 
     def save_to_file(self, filename):
+        directory = os.path.dirname(filename)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
         with open(filename, "w") as f:
             json.dump(self.get_data(), f, indent=2)
 
@@ -309,7 +311,7 @@ class OptColoring:
 
         :return:
         """
-        self.colors = ...
+        self.colors = None
         pass
 
     def optimize_painting(self):
